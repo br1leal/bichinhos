@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#7fcbff">
+<title>Bichinhos</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🐥</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="skySav" class="skyw"></div>
+<div id="skyForest" class="skyw"></div>
+<div id="dusk"></div>
+<div id="nightSky"></div>
+<div id="sun"></div>
+<div id="moon" class="moon"></div>
+<div id="bubble"></div>
+<div id="goodnight"></div>
+<div id="hint">Aponte para onde o bichinho deve andar</div>
+<div id="controls">
+  <button id="night" aria-pressed="false" aria-label="Modo noite">🌙</button>
+  <button id="music" aria-pressed="true" aria-label="Música">🎵</button>
+  <button id="sound" aria-pressed="true" aria-label="Sons">🔊</button>
+</div>
+<nav id="picker" aria-label="Escolher bichinho">
+  <button data-pick="duck" aria-pressed="true"><span>🐥</span><b>Patinho</b></button>
+  <button data-pick="elephant" aria-pressed="false"><span>🐘</span><b>Elefante</b></button>
+  <button data-pick="lion" aria-pressed="false"><span>🦁</span><b>Leãozinho</b></button>
+  <button data-pick="owl" aria-pressed="false"><span>🦉</span><b>Corujinha</b></button>
+</nav>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
