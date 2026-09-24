@@ -74,6 +74,19 @@ export function createAudio(st){
       o.start(s); o2.start(s); o.stop(s + len + 0.15); o2.stop(s + len + 0.15);
     });
   }
+  // "nhac nhac" do jacaré: duas mordidinhas graves e fofas
+  function chompSound(){
+    if (!sfxOn || !ac) return;
+    const t0 = ac.currentTime;
+    for (let i = 0; i < 2; i++){
+      const s = t0 + i * 0.2;
+      const o = ac.createOscillator(); o.type = 'triangle';
+      o.frequency.setValueAtTime(260, s); o.frequency.exponentialRampToValueAtTime(110, s + 0.12);
+      const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 900;
+      const g = ac.createGain(); env(g, s, 0.45, 0.008, 0.13);
+      o.connect(f); f.connect(g); g.connect(fxGain); o.start(s); o.stop(s + 0.16);
+    }
+  }
   function roarSound(){
     if (!sfxOn || !ac) return;
     const s = ac.currentTime;
@@ -128,6 +141,7 @@ export function createAudio(st){
     duck:     { bpm:112, oct:0,   wave:'sine',     bassWave:'triangle', bell:true },
     elephant: { bpm:92,  oct:-12, wave:'triangle', bassWave:'sine',     bell:false, pum:true },
     lion:     { bpm:126, oct:0,   wave:'triangle', bassWave:'triangle', bell:false, xylo:true },
+    gator:    { bpm:120, oct:0,   wave:'triangle', bassWave:'triangle', bell:false, xylo:true },
     owl:      { bpm:84,  oct:0,   wave:'triangle', bassWave:'sine',     bell:true },
     night:    { bpm:62,  oct:0,   wave:'sine',     bassWave:'sine',     bell:true, arp:true, mel:LULL, bass:LBASS, bassEvery:6 }
   };
@@ -213,7 +227,7 @@ export function createAudio(st){
 
   return {
     start: startAudio,
-    quack: quackSound, trumpet: trumpetSound, hoot: hootSound, roar: roarSound, pop: popSound, thud,
+    quack: quackSound, trumpet: trumpetSound, hoot: hootSound, roar: roarSound, chomp: chompSound, pop: popSound, thud,
     setVoice: setMusicVoice,
     toggleMusic(){ musicOn = !musicOn; musicOn ? startMusic() : stopMusic(); return musicOn; },
     toggleSfx(){ sfxOn = !sfxOn; return sfxOn; },

@@ -1,72 +1,115 @@
 import * as THREE from 'three';
-import { mat, shadowy, black, white, cheekMat, addEyes } from '../materials.js';
+import { sculptMesh, ellipsoid, sphere, roundCone, smin, sub, inter, rgb, layer } from '../sculpt.js';
+import { makeEye } from '../eyes.js';
+import { biped } from './biped.js';
 
 // ================= patinho =================
+// Referência: cabeção redondo, topete de 3 pétalas, olhos grandes, bico largo
+// com sorrisinho e narinas, bochechas rosadas, corpo de pera com barriga clara,
+// asinhas em remo, rabinho em leque e pés com 3 dedinhos.
+
+const C = {
+  body: rgb(0xf0ad2c), tuft: rgb(0xf8da78), belly: rgb(0xf6e29a),
+  bill: rgb(0xf08a3d), billLo: rgb(0xe57837), nose: rgb(0xc9602b),
+  cheek: rgb(0xf4a5b5), foot: rgb(0xee8538)
+};
+
+// ---------- cabeça ----------
+const tuftSdf = (x, y, z) => {
+  let d = roundCone(x, y, z, [0, 0.6, -0.04], [0, 0.93, -0.02], 0.05, 0.105);
+  d = smin(d, roundCone(x, y, z, [-0.04, 0.6, -0.05], [-0.19, 0.83, -0.03], 0.045, 0.09), 0.03);
+  d = smin(d, roundCone(x, y, z, [0.04, 0.6, -0.05], [0.19, 0.83, -0.03], 0.045, 0.09), 0.03);
+  return d;
+};
+// bico de cima: largo e achatado, cantinhos subindo num sorriso
+const billSdf = (x, y, z) => ellipsoid(x, y + 0.28 * x * x, z, 0, -0.23, 0.68, 0.44, 0.14, 0.34);
+const nostril = (x, y, z) => Math.min(sphere(x, y, z, 0.08, -0.1, 0.96, 0.028), sphere(x, y, z, -0.08, -0.1, 0.96, 0.028));
+
+function headSdf(x, y, z){
+  let d = ellipsoid(x, y, z, 0, 0, 0, 0.75, 0.7, 0.67);
+  d = smin(d, tuftSdf(x, y, z), 0.07);
+  d = smin(d, billSdf(x, y, z), 0.07);
+  d = sub(d, nostril(x, y, z) + 0.012, 0.03);
+  return d;
+}
+function headPaint(x, y, z){
+  let c = C.body;
+  c = layer(c, tuftSdf(x, y, z) - 0.01, C.tuft, 0.03);
+  c = layer(c, billSdf(x, y, z) - 0.004, C.bill, 0.01);
+  c = layer(c, nostril(x, y, z) - 0.012, C.nose, 0.006);
+  c = layer(c, Math.min(sphere(x, y, z, 0.575, -0.27, 0.41, 0.1), sphere(x, y, z, -0.575, -0.27, 0.41, 0.1)), C.cheek, 0.006);
+  return c;
+}
+// bico de baixo (separado, para abrir quando fala)
+const jawSdf = (x, y, z) => ellipsoid(x, y + 0.3 * x * x, z, 0, -0.01, 0.22, 0.37, 0.1, 0.27);
+
+// ---------- corpo ----------
+function bodySdf(x, y, z){
+  let d = smin(ellipsoid(x, y, z, 0, 0.52, 0, 0.45, 0.43, 0.41), ellipsoid(x, y, z, 0, 0.82, 0, 0.33, 0.3, 0.31), 0.18);
+  // rabinho em leque
+  let t = roundCone(x, y, z, [0, 0.5, -0.33], [0, 0.63, -0.5], 0.06, 0.055);
+  t = smin(t, roundCone(x, y, z, [-0.03, 0.49, -0.33], [-0.1, 0.58, -0.47], 0.05, 0.045), 0.02);
+  t = smin(t, roundCone(x, y, z, [0.03, 0.49, -0.33], [0.1, 0.58, -0.47], 0.05, 0.045), 0.02);
+  return smin(d, t, 0.05);
+}
+const bodyPaint = (x, y, z) => layer(C.body, ellipsoid(x, y, z, 0, 0.5, 0.3, 0.32, 0.31, 0.18), C.belly, 0.012);
+
+// ---------- asinha (remo) ----------
+const wingSdf = s => (x, y, z) => {
+  const f = 1.35; // achata de lado
+  return roundCone(x * f, y, z, [0, 0, 0], [s * 0.1 * f, -0.3, 0.03], 0.1, 0.16) / f;
+};
+
+// ---------- pé ----------
+function footSdf(x, y, z){
+  const leg = roundCone(x, y, z, [0, 0.1, 0], [0, 0.34, 0], 0.075, 0.09);
+  let foot = ellipsoid(x, y, z, 0, 0.055, 0.1, 0.19, 0.065, 0.22);
+  for (const dx of [-0.11, 0, 0.11]) foot = smin(foot, sphere(x, y, z, dx, 0.045, 0.28, 0.075), 0.05);
+  return inter(smin(leg, foot, 0.06), -y, 0.015); // sola reta
+}
+
 export function makeDuck(fx){
-  const yellow = mat(0xffd43b, 0.55), yellowDeep = mat(0xf7c21a, 0.6), orange = mat(0xff8f1f, 0.5);
   const root = new THREE.Group();
   const body = new THREE.Group(); root.add(body);
 
-  const torso = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.8, 32, 24), yellow));
-  torso.scale.set(1, 0.82, 1.18); torso.position.y = 0.85; body.add(torso);
-  const tail = shadowy(new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.55, 16), yellow));
-  tail.position.set(0, 1.1, -0.95); tail.rotation.x = -Math.PI/3; body.add(tail);
+  body.add(sculptMesh({ bounds: [[-0.55, 0.03, -0.62], [0.55, 1.2, 0.52]], step: 0.022, sdf: bodySdf, paint: bodyPaint }));
 
-  const wings = [];
-  [-1,1].forEach(s=>{
-    const pivot = new THREE.Group(); pivot.position.set(s*0.72, 1.0, -0.05);
-    const w = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 16), yellowDeep));
-    w.scale.set(0.28, 0.62, 1); w.position.set(s*0.06, -0.15, 0); w.rotation.x = 0.25;
-    pivot.add(w); pivot.userData.side = s; body.add(pivot); wings.push(pivot);
+  const arms = [];
+  [-1, 1].forEach(s => {
+    const p = new THREE.Group(); p.position.set(s * 0.42, 0.9, 0.03); p.userData.side = s;
+    p.add(sculptMesh({ bounds: [[-0.2 + s * 0.06, -0.66, -0.2], [0.2 + s * 0.06, 0.14, 0.22]], step: 0.014, sdf: wingSdf(s), paint: () => C.body }));
+    body.add(p); arms.push(p);
   });
 
-  const head = new THREE.Group(); head.position.set(0, 1.72, 0.55); body.add(head);
-  head.add(shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.56, 32, 24), yellow)));
-  const tuft = shadowy(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.32, 10), yellow));
-  tuft.position.set(0, 0.6, -0.05); tuft.rotation.x = -0.4; head.add(tuft);
-  const tuft2 = tuft.clone(); tuft2.position.set(0.1, 0.56, -0.12); tuft2.rotation.z = -0.5; head.add(tuft2);
+  const head = new THREE.Group(); head.position.set(0, 1.62, 0.02); head.scale.setScalar(1.07); body.add(head);
+  head.add(sculptMesh({ bounds: [[-0.9, -0.8, -0.75], [0.9, 1.05, 1.14]], step: 0.02, sdf: headSdf, paint: headPaint }));
+  const jaw = new THREE.Group(); jaw.position.set(0, -0.33, 0.46); head.add(jaw);
+  jaw.add(sculptMesh({ bounds: [[-0.44, -0.14, -0.08], [0.44, 0.12, 0.54]], step: 0.012, sdf: jawSdf, paint: () => C.billLo }));
 
-  const beakTop = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.28, 20, 14), orange));
-  beakTop.scale.set(1, 0.34, 1.1); beakTop.position.set(0, -0.06, 0.5); head.add(beakTop);
-  const jaw = new THREE.Group(); jaw.position.set(0, -0.12, 0.3); head.add(jaw);
-  const beakLow = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.24, 20, 14), orange));
-  beakLow.scale.set(0.95, 0.26, 1); beakLow.position.set(0, -0.02, 0.17); jaw.add(beakLow);
-
-  const eyes = addEyes(head, 0.23, 0.13, 0.45, 0.095);
-
-  const feet = [];
-  [-1,1].forEach(s=>{
-    const f = new THREE.Group(); f.position.set(s*0.3, 0, 0.05);
-    const leg = shadowy(new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.3, 8), orange));
-    leg.position.y = 0.2; f.add(leg);
-    const foot = shadowy(new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 10), orange));
-    foot.scale.set(1, 0.28, 1.35); foot.position.set(0, 0.05, 0.12); f.add(foot);
-    root.add(f); feet.push(f);
+  const eyes = [];
+  [-1, 1].forEach(s => {
+    const e = makeEye({ r: 0.235, depth: 0.72, pupil: [0.6, 0.6], pupilOffset: [-0.08, -0.04], side: s });
+    e.position.set(s * 0.36, 0.0, 0.5); e.rotation.y = s * 0.3;
+    head.add(e); eyes.push(e);
   });
 
+  const legs = [];
+  [-1, 1].forEach(s => {
+    const f = new THREE.Group(); f.position.set(s * 0.27, 0, 0.02);
+    f.add(sculptMesh({ bounds: [[-0.28, -0.01, -0.18], [0.28, 0.42, 0.4]], step: 0.014, sdf: footSdf, paint: () => C.foot }));
+    root.add(f); legs.push(f);
+  });
+
+  const walk = biped({ body, head, arms, legs }, { sway: 0.14, bounce: 0.09, stride: 0.2 });
   let talkT = 0;
   return {
-    name:'duck', root, head, eyes, bubbleUp:0.95, sink:0.5, jump:5.2, walkRate:1,
-    words:['Quá quá!','Quá!'],
+    name: 'duck', root, head, eyes, bubbleUp: 1.25, sink: 0.5, jump: 5.2, walkRate: 1,
+    words: ['Quá quá!', 'Quá!'],
     speak(){ talkT = 0.45; fx.quack(); },
     anim(s, dt){
-      const w = s.moveAmt * (1 - s.swim*0.8);
-      body.rotation.z = Math.sin(s.walk) * 0.2 * w;
-      body.rotation.x = -0.08 * s.moveAmt + Math.sin(s.t*2) * 0.02;
-      body.position.y = Math.abs(Math.sin(s.walk))*0.12*w + Math.sin(s.t*2.4)*0.02*s.swim + s.jumpY - s.swim*this.sink;
-      feet.forEach((f,i)=>{
-        const sd = i ? -1 : 1;
-        f.position.z = 0.05 + Math.sin(s.walk)*0.26*sd*w;
-        f.position.y = Math.max(0, Math.cos(s.walk)*sd)*0.12*w + s.jumpY - s.swim*this.sink;
-      });
-      const flap = s.jumpY > 0.01 ? Math.sin(s.t*40)*0.6 + 0.6 : Math.sin(s.walk)*0.1*s.moveAmt;
-      wings.forEach(p => p.rotation.z = p.userData.side * flap);
-      head.rotation.y = Math.sin(s.t*0.8)*0.45*(1-s.moveAmt);
-      head.rotation.x = Math.sin(s.t*1.7)*0.06*(1-s.moveAmt) - 0.05*s.moveAmt;
-      head.rotation.z = Math.sin(s.t*0.6)*0.08*(1-s.moveAmt);
-      if (talkT > 0){ talkT -= dt; jaw.rotation.x = Math.abs(Math.sin(talkT*28))*0.5; }
+      walk(s, dt, this.sink);
+      if (talkT > 0){ talkT -= dt; jaw.rotation.x = Math.abs(Math.sin(talkT * 28)) * 0.4; }
       else jaw.rotation.x *= 0.8;
     }
   };
 }
-

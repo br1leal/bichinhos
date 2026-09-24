@@ -4,7 +4,7 @@ import { mat, shadowy, black, white, cheekMat } from './materials.js';
 import { PR, UP, place, randDir, winDay, winNight, makeWorld } from './world.js';
 import { makeDuck } from './characters/duck.js';
 import { makeElephant } from './characters/elephant.js';
-import { makeLion } from './characters/lion.js';
+import { makeGator } from './characters/gator.js';
 import { makeOwl } from './characters/owl.js';
 import { createAudio } from './audio.js';
 import { createSky } from './sky.js';
@@ -43,7 +43,7 @@ sun.intensity = 0.95; sun.color.set(0xffffff);
 let planet = null;
 // MVP: todos os bichinhos no mesmo cenário (a fazenda). savanna e forest continuam em world.js para depois.
 const worlds = { farm: makeWorld('farm', scene) };
-const WORLD_OF = { duck:'farm', elephant:'farm', lion:'farm', owl:'farm' };
+const WORLD_OF = { duck:'farm', elephant:'farm', gator:'farm', owl:'farm' };
 let world = worlds.farm, oldWorld = null;
 planet = world.group; world.pop = 1;
 
@@ -91,10 +91,10 @@ function inPondDir(n, pad=0.35){
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
 // ================= personagens =================
-const fx = { quack:() => audio.quack(), trumpet:() => audio.trumpet(), roar:() => audio.roar(), hoot:() => audio.hoot(), spawnDrop };
-const chars = { duck: makeDuck(fx), elephant: makeElephant(fx), lion: makeLion(fx), owl: makeOwl(fx) };
-const ORDER = ['duck','elephant','lion','owl'];
-chars.duck.sleepDrop = 0.25; chars.elephant.sleepDrop = 0.4; chars.lion.sleepDrop = 0.3;
+const fx = { quack:() => audio.quack(), trumpet:() => audio.trumpet(), chomp:() => audio.chomp(), hoot:() => audio.hoot(), spawnDrop };
+const chars = { duck: makeDuck(fx), elephant: makeElephant(fx), gator: makeGator(fx), owl: makeOwl(fx) };
+const ORDER = ['duck','elephant','gator','owl'];
+chars.duck.sleepDrop = 0.25; chars.elephant.sleepDrop = 0.4; chars.gator.sleepDrop = 0.3;
 Object.values(chars).forEach(c => { scene.add(c.root); c.root.visible = false; c.pop = 0; });
 let cur = chars.duck, prev = null;
 cur.root.visible = true; cur.pop = 1;
@@ -283,7 +283,8 @@ function resize(){
 window.addEventListener('resize', resize); resize();
 
 // ================= loop =================
-const CS = 1.25;
+const CS = 1.12;
+let faceYaw = 0;
 let blinkIn = 2.5, blinkT = 0, rippleIn = 0, shake = 0;
 const clock = new THREE.Clock(), dir = new THREE.Vector3();
 const easeBack = x => { const c = 2.2; return 1 + (c+1)*Math.pow(x-1,3) + c*Math.pow(x-1,2); };
@@ -313,6 +314,7 @@ function frame(){
     planet.quaternion.premultiply(qStep);
   }
   S.yaw = mover.yaw;
+  faceYaw += (Math.sin(mover.yaw) * 0.55 * S.moveAmt - faceYaw) * Math.min(1, dt * 6);
   S.moveAmt += (Math.min(speed/3, 1) - S.moveAmt) * Math.min(1, dt*8);
   S.walk += dt * (6 + speed*2.2) * S.moveAmt;
   S.swim += ((inPondDir(UP) ? 1 : 0) - S.swim) * Math.min(1, dt*5);
@@ -341,7 +343,8 @@ function frame(){
   [cur, prev].forEach(c => {
     if (!c) return;
     c.root.position.copy(mover.pos);
-    c.root.rotation.y = mover.yaw;
+    // sempre de frente para a tela: só vira um pouquinho para o lado em que está andando
+    c.root.rotation.y = faceYaw;
     c.anim(S, dt);
     c.root.position.y = -S.sleep * (c.sleepDrop || 0);
     c.head.rotation.x += S.sleep * 0.35;
@@ -370,7 +373,8 @@ function frame(){
   let lid = blinkT > 0 ? 0.12 : 1;
   if (nightAmt > 0.5) lid = Math.min(lid, 0.6);
   if (S.sleep > 0.5) lid = 0.08;
-  cur.eyes.forEach(e => e.scale.y += (lid - e.scale.y) * 0.6);
+  cur.lidV = (cur.lidV ?? 1) + (lid - (cur.lidV ?? 1)) * 0.6;
+  cur.eyes.forEach(e => e.userData.setLid ? e.userData.setLid(cur.lidV) : (e.scale.y = cur.lidV));
 
   // ondinhas
   rippleIn -= dt;
