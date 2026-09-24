@@ -8,6 +8,18 @@ import { makeGator } from './characters/gator.js';
 import { makeOwl } from './characters/owl.js';
 import { createAudio } from './audio.js';
 import { createSky } from './sky.js';
+import { createStory } from './story.js';
+import { makeField } from './field.js';
+
+// Garante a interface mesmo que o index.html seja de uma versão antiga:
+// tira o menu de bichinhos (não é mais usado) e cria o que faltar.
+(function ensureUI(){
+  document.getElementById('picker')?.remove();
+  if (!document.getElementById('quest'))
+    document.body.insertAdjacentHTML('beforeend', '<div id="quest" hidden><span class="q-label">Encontre</span><span class="q-slots"></span></div>');
+  if (!document.getElementById('zoom'))
+    document.body.insertAdjacentHTML('beforeend', '<div id="zoom"><button id="zin" aria-label="Aproximar">+</button><button id="zout" aria-label="Afastar">−</button></div>');
+})();
 
 const audio = createAudio({ night:() => nightOn, nightElapsed:() => S.t - nightStartT, onAutoStop:() => musicBtn.setAttribute('aria-pressed', false) });
 
@@ -27,7 +39,10 @@ const hemi = new THREE.HemisphereLight(0xffffff, 0x6aa84f, 0.85);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xffffff, 0.95);
 sun.position.set(6, 7, 9);
-sun.target.position.set(0, -PR_SHADOW, 0); scene.add(sun.target);
+sun.target.position.set(0, 0, 0); scene.add(sun.target);
+// névoa: o campo some suavemente no horizonte (sensação de espaço aberto)
+const fogDay = new THREE.Color(0xd6f0ff), fogNight = new THREE.Color(0x2e3a78);
+scene.fog = new THREE.Fog(fogDay.clone(), 16, 46);
 sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -42,20 +57,23 @@ sun.intensity = 0.95; sun.color.set(0xffffff);
 
 let planet = null;
 // MVP: todos os bichinhos no mesmo cenário (a fazenda). savanna e forest continuam em world.js para depois.
-const worlds = { farm: makeWorld('farm', scene) };
+const worlds = { farm: makeField(scene) };
+// quanto o bichinho já andou no campo (o campo desliza ao contrário)
+const OFF = new THREE.Vector3();
 const WORLD_OF = { duck:'farm', elephant:'farm', gator:'farm', owl:'farm' };
 let world = worlds.farm, oldWorld = null;
 planet = world.group; world.pop = 1;
 
 const clouds = [];
 const cloudMat = new THREE.MeshStandardMaterial({ color:0xffffff, roughness:1, transparent:true, opacity:0.95 });
-[[-9,6,-9],[7,7.5,-11],[12,5,-4]].forEach(([x,y,z],i)=>{
+cloudMat.fog = false;
+[[-16,9,-28],[8,11,-32],[24,8,-24],[-30,10,-20],[36,12,-34]].forEach(([x,y,z],i)=>{
   const c = new THREE.Group();
   [[0,0,0,1.1],[1.1,-0.2,0,0.8],[-1.1,-0.25,0,0.75],[0.4,0.45,0,0.7]].forEach(([cx,cy,cz,cr])=>{
     const m = new THREE.Mesh(new THREE.SphereGeometry(cr,16,12), cloudMat);
     m.position.set(cx,cy,cz); c.add(m);
   });
-  c.position.set(x,y,z); c.userData.speed = 0.25 + i*0.1; scene.add(c); clouds.push(c);
+  c.position.set(x,y,z); c.scale.setScalar(2.2); c.userData.speed = 0.25 + i*0.1; scene.add(c); clouds.push(c);
 });
 
 // ================= gotas de água =================
@@ -76,17 +94,10 @@ function spawnDrop(from, yaw){
 const ripples = [];
 const rippleGeo = new THREE.RingGeometry(0.85, 1, 40);
 function spawnRipple(worldPos, size=1){
-  const local = planet.worldToLocal(worldPos.clone()).normalize();
   const m = new THREE.Mesh(rippleGeo, new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:0.6, side:THREE.DoubleSide }));
-  m.rotation.x = -Math.PI/2;
-  const h = place(m, local, 0.05, planet, 0);
-  h.userData = { life:0, size, mesh:m };
-  ripples.push(h);
-}
-const pondW = new THREE.Vector3();
-function inPondDir(n, pad=0.35){
-  pondW.copy(world.pondDir).applyQuaternion(planet.quaternion);
-  return n.angleTo(pondW) < world.pondAng - pad / PR;
+  m.rotation.x = -Math.PI/2; m.position.set(worldPos.x, 0.05, worldPos.z); scene.add(m);
+  m.userData = { life:0, size, mesh:m, bx: worldPos.x + OFF.x, bz: worldPos.z + OFF.z };
+  ripples.push(m);
 }
 const ORIGIN = new THREE.Vector3(0, 0, 0);
 
@@ -112,6 +123,7 @@ const asleep = () => nightOn && !cur.flies;
 
 function pick(name){
   if (chars[name] === cur) { speak(); return; }
+  story.reset(name);
   if (prev){ prev.root.visible = false; prev = null; }
   prev = cur; cur = chars[name];
   prev.pop = 1;
@@ -154,12 +166,7 @@ window.addEventListener('keydown', e => {
   const k = e.key;
   wake();
   if (k === 'n' || k === 'N'){ audio.start(); setNight(!nightOn); return; }
-  if (k === 'ArrowRight' || k === 'ArrowLeft' || k === 'ArrowUp' || k === 'ArrowDown'){
-    e.preventDefault(); audio.start();
-    const d = (k === 'ArrowRight' || k === 'ArrowDown') ? 1 : -1;
-    const i = ORDER.indexOf(cur.name);
-    pick(ORDER[(i + d + ORDER.length) % ORDER.length]);
-  } else if (k === ' ' && !(e.target.closest && e.target.closest('button'))){
+  if (k === ' ' && !(e.target.closest && e.target.closest('button'))){
     e.preventDefault(); audio.start(); if (!asleep()) speak();
   }
 });
@@ -177,8 +184,13 @@ window.addEventListener('pointerdown', e => {
   audio.start();
   if (e.target.closest('button,nav')) return;
   pointTo(e);
+  const rect = renderer.domElement.getBoundingClientRect();
+  tapNdc.set(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+  tapRay.setFromCamera(tapNdc, camera);
+  if (story.tryTap(tapRay)) return;
   if (!asleep()) speak();
 });
+const tapRay = new THREE.Raycaster(), tapNdc = new THREE.Vector2();
 const stopPtr = e => { if (!e || e.pointerType !== 'mouse') ptr.active = false; };
 window.addEventListener('pointerup', stopPtr);
 window.addEventListener('pointercancel', () => ptr.active = false);
@@ -189,7 +201,9 @@ window.addEventListener('blur', () => ptr.active = false);
 const bubble = document.getElementById('bubble');
 let bubbleTimer = 0;
 const NIGHT_WORDS = ['Boa noite!','Hora de nanar...','Aaaah 🥱'];
-function say(text, ms){
+let bubbleTarget = null;
+function say(text, ms, target = null){
+  bubbleTarget = target;
   bubble.textContent = text;
   bubble.classList.add('show');
   clearTimeout(bubbleTimer);
@@ -272,25 +286,45 @@ function resize(){
   const w = window.innerWidth, h = window.innerHeight;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
-  const k = camera.aspect < 1.1 ? Math.min(1.8, 1.05 / camera.aspect) : 1;
-  const D = 13 * k, el = 0.3;
-  camLook.set(0, 1.0 + (k - 1) * 0.8, 0);
-  camBase.set(0, camLook.y + D * Math.sin(el), D * Math.cos(el));
+  camFit();
   camera.position.copy(camBase);
   camera.lookAt(camLook);
   camera.updateProjectionMatrix();
 }
+// zoom: botões + / − e rodinha do mouse
+let zoomT = 1, zoomC = 1;
+function camFit(){
+  const k = camera.aspect < 1.1 ? Math.min(1.35, 0.95 / camera.aspect) : 1;
+  const D = 10.5 * k * zoomC, el = 0.24;
+  camLook.set(0, 1.75 + (k - 1) * 0.4, 0);
+  camBase.set(0, camLook.y + D * Math.sin(el), D * Math.cos(el));
+}
+const setZoom = z => { zoomT = Math.min(1.7, Math.max(0.55, z)); };
+document.getElementById('zin').addEventListener('click', () => setZoom(zoomT / 1.2));
+document.getElementById('zout').addEventListener('click', () => setZoom(zoomT * 1.2));
+window.addEventListener('wheel', e => { setZoom(zoomT * (e.deltaY > 0 ? 1.08 : 1 / 1.08)); }, { passive: true });
 window.addEventListener('resize', resize); resize();
 
 // ================= loop =================
 const CS = 1.12;
+const DT_CAP = location.search.includes('debug') ? 0.4 : 0.05; // no teste automático o tempo corre mais rápido
+const story = createStory({
+  scene, place, PR, UP, chars, S, CS,
+  getPrev: () => prev, getField: () => world, getMover: () => mover, OFF, camera,
+  getCur: () => cur, owl: chars.owl,
+  night: () => nightOn, nightAmt: () => nightAmt, setNight: (v) => setNight(v, true),
+  zoomOut: () => setZoom(zoomT * 1.15),
+  say: (t, ms, target) => say(t, ms, target)
+});
+story.reset(cur.name);
+if (location.search.includes('debug')) window.__dbg = { story, setNight, S, renderer, scene };
 let faceYaw = 0;
 let blinkIn = 2.5, blinkT = 0, rippleIn = 0, shake = 0;
 const clock = new THREE.Clock(), dir = new THREE.Vector3();
 const easeBack = x => { const c = 2.2; return 1 + (c+1)*Math.pow(x-1,3) + c*Math.pow(x-1,2); };
 
 function frame(){
-  const dt = Math.min(clock.getDelta(), 0.05); S.t += dt;
+  const dt = Math.min(clock.getDelta(), DT_CAP); S.t += dt;
 
   // o bichinho fica no topo e o mundinho gira embaixo dele
   let want = 0;
@@ -309,15 +343,14 @@ function frame(){
   const speed = curSpeed;
   if (speed > 0.01){
     dir.set(Math.sin(mover.yaw), 0, Math.cos(mover.yaw));
-    axis.crossVectors(dir, UP).normalize();
-    qStep.setFromAxisAngle(axis, speed * dt / PR);
-    planet.quaternion.premultiply(qStep);
+    OFF.addScaledVector(dir, speed * dt);
   }
+  world.update(OFF);
   S.yaw = mover.yaw;
   faceYaw += (Math.sin(mover.yaw) * 0.55 * S.moveAmt - faceYaw) * Math.min(1, dt * 6);
   S.moveAmt += (Math.min(speed/3, 1) - S.moveAmt) * Math.min(1, dt*8);
   S.walk += dt * (6 + speed*2.2) * S.moveAmt;
-  S.swim += ((inPondDir(UP) ? 1 : 0) - S.swim) * Math.min(1, dt*5);
+  S.swim += ((world.inPond(0, 0, 0.35) ? 1 : 0) - S.swim) * Math.min(1, dt*5);
   S.idle = S.t - lastMoveT;
   // dorme quando a noite já chegou (depois do bocejo); acorda devagar quando o dia volta
   const sleepWant = asleep() && nightAmt > 0.55 ? 1 : 0;
@@ -365,6 +398,8 @@ function frame(){
     prev.root.scale.setScalar(CS * Math.max(0.001, easeIn(Math.max(0, prev.pop))));
     if (prev.pop <= 0){ prev.root.visible = false; prev = null; }
   }
+  story.update(dt);
+  if (Math.abs(zoomT - zoomC) > 0.0005){ zoomC += (zoomT - zoomC) * Math.min(1, dt * 6); camFit(); }
 
   // piscar
   blinkIn -= dt;
@@ -384,6 +419,7 @@ function frame(){
   }
   for (let i = ripples.length - 1; i >= 0; i--){
     const r = ripples[i], u = r.userData; u.life += dt;
+    r.position.x = u.bx - OFF.x; r.position.z = u.bz - OFF.z;
     const l = u.life;
     u.mesh.scale.setScalar((0.5 + l*1.3) * u.size);
     u.mesh.material.opacity = Math.max(0, 0.6 - l*0.5);
@@ -393,35 +429,23 @@ function frame(){
   // gotas
   drops.forEach(d => {
     if (!d.visible) return;
-    tmp.copy(planet.position).sub(d.position).normalize();
-    d.userData.v.addScaledVector(tmp, 12 * dt);
+    d.userData.v.y -= 12 * dt;
     d.position.addScaledVector(d.userData.v, dt);
-    tmp.copy(d.position).sub(planet.position);
-    if (tmp.length() < PR + 0.04){
+    if (d.position.y < 0.03){
       d.visible = false;
-      if (inPondDir(tmp.normalize(), 0.1) && Math.random() < 0.25) spawnRipple(d.position, 0.4);
+      if (world.inPond(d.position.x, d.position.z, 0.1) && Math.random() < 0.25) spawnRipple(d.position, 0.4);
     }
   });
 
   // cenário
-  world.glows.forEach(gl => gl.m.color.copy(gl.c).multiplyScalar(0.55 + 0.45 * nightAmt));
-  world.flowers.forEach(f => f.rotation.z = Math.sin(S.t*1.5 + f.userData.phase) * 0.06);
-  world.critters.forEach(c => c(S.t));
-  clouds.forEach(c => { c.position.x += c.userData.speed * dt; if (c.position.x > 16) c.position.x = -16; });
-  world.wins.forEach(m => m.color.copy(winDay).lerp(winNight, nightAmt));
-  world.flies.forEach(f => {
-    const u = f.userData;
-    f.position.copy(u.d).multiplyScalar(PR + u.h + Math.sin(S.t*u.sp*1.7 + u.p)*0.35);
-    f.position.x += Math.sin(S.t*u.sp + u.p)*0.5; f.position.z += Math.cos(S.t*u.sp*0.8 + u.p)*0.5;
-    f.material.opacity = nightAmt * (0.35 + 0.65 * Math.max(0, Math.sin(S.t*2.2 + u.p*3)));
-    u.glow.material.opacity = f.material.opacity * 0.3;
-    f.visible = nightAmt > 0.02;
-  });
+  world.tick(S.t, nightAmt);
+  clouds.forEach(c => { c.position.x += c.userData.speed * dt; if (c.position.x > 30) c.position.x = -30; });
+  scene.fog.color.copy(fogDay).lerp(fogNight, nightAmt);
   zIn -= dt;
   if (S.sleep > 0.8 && zIn <= 0){ zzz(); zIn = 1.4; }
   sleepHeld = S.sleep > 0.95 ? sleepHeld + dt : 0;
   owlHeld = nightOn && cur.flies && nightAmt > 0.95 ? owlHeld + dt : 0;
-  if (sleepHeld > 2.5) goodnight.textContent = 'Shhh... o bichinho está dormindo. Boa noite! 🌙';
+  if (sleepHeld > 2.5) goodnight.textContent = story.owlHere() ? 'Shhh... todos dormindo. A corujinha cuida de todos 🦉' : 'Shhh... o bichinho está dormindo. Boa noite! 🌙';
   else if (owlHeld > 3) goodnight.textContent = 'A corujinha fica acordada cuidando de todos 🦉';
   goodnight.classList.toggle('show', sleepHeld > 2.5 || (owlHeld > 3 && owlHeld < 9));
 
@@ -433,7 +457,8 @@ function frame(){
   camera.lookAt(camLook);
 
   if (bubble.classList.contains('show')){
-    const p = screenOf(cur.head, cur.bubbleUp);
+    const bt = bubbleTarget || cur;
+    const p = screenOf(bt.head, bt.bubbleUp);
     bubble.style.left = p.x + 'px'; bubble.style.top = p.y + 'px';
   }
 

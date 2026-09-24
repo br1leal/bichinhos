@@ -41,7 +41,7 @@ button:focus-visible{outline:3px solid #ff8f1f;outline-offset:3px}
 @media (max-width:560px){ #picker b{display:none} #picker button{padding:6px 12px} #hint{white-space:normal;text-align:center;width:max-content;max-width:86vw} }
 
 #hint{
-  position:fixed;left:50%;bottom:calc(100px + env(safe-area-inset-bottom,0px));
+  position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom,0px));
   transform:translateX(-50%);background:var(--chip);backdrop-filter:blur(6px);
   padding:6px 18px;border-radius:999px;font-weight:600;
   font-size:clamp(14px,2.2vw,18px);white-space:nowrap;pointer-events:none;
@@ -128,3 +128,34 @@ canvas{z-index:1}
   opacity:0;transition:opacity 1.6s ease;pointer-events:none;
 }
 #goodnight.show{opacity:1}
+
+/* ---------- historinha: quem falta encontrar ---------- */
+#quest{
+  position:fixed;left:50%;top:calc(14px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:3;
+  display:flex;align-items:center;gap:10px;background:var(--chip);backdrop-filter:blur(8px);
+  padding:6px 16px;border-radius:999px;font-weight:800;font-size:clamp(14px,2.2vw,18px);
+  transition:opacity .8s ease;
+}
+#quest[hidden]{display:none}
+#quest.dim{opacity:0;pointer-events:none}
+.q-slots{display:flex;gap:6px}
+.slot{font-size:clamp(26px,5vw,34px);line-height:1;filter:brightness(0) opacity(.3);transition:filter .6s ease, transform .4s ease}
+.slot.next{filter:brightness(0) opacity(.55);animation:qpulse 1.6s ease-in-out infinite}
+.slot.found{filter:none;animation:none;transform:scale(1.08)}
+@keyframes qpulse{50%{transform:scale(1.12)}}
+@media (max-width:560px){ #quest{top:calc(74px + env(safe-area-inset-top,0px))} }
+
+/* ---------- zoom ---------- */
+#zoom{position:fixed;right:14px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:3;display:flex;flex-direction:column;gap:8px}
+#zoom button{width:46px;height:46px;border-radius:50%;border:0;background:var(--chip);font-size:26px;font-weight:800;line-height:1;color:var(--ink)}
+#zoom button:active{transform:scale(.92)}
+
+/* ---------- setinha que aponta o próximo amigo ---------- */
+#finder{
+  position:fixed;left:0;top:0;z-index:3;pointer-events:none;width:58px;height:58px;
+  display:grid;place-items:center;border-radius:50%;color:#e79a1d;
+  background:rgba(255,248,222,.92);box-shadow:0 4px 14px rgba(120,90,20,.18);
+  opacity:0;transition:opacity .5s ease;
+}
+#finder svg{width:34px;height:34px}
+#finder.show{opacity:1}

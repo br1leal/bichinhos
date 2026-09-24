@@ -25,12 +25,11 @@
   <button id="music" aria-pressed="true" aria-label="Música">🎵</button>
   <button id="sound" aria-pressed="true" aria-label="Sons">🔊</button>
 </div>
-<nav id="picker" aria-label="Escolher bichinho">
-  <button data-pick="duck" aria-pressed="true"><span>🐥</span><b>Patinho</b></button>
-  <button data-pick="elephant" aria-pressed="false"><span>🐘</span><b>Elefante</b></button>
-  <button data-pick="gator" aria-pressed="false"><span>🐊</span><b>Jacaré</b></button>
-  <button data-pick="owl" aria-pressed="false"><span>🦉</span><b>Corujinha</b></button>
-</nav>
+<div id="quest" hidden><span class="q-label">Encontre</span><span class="q-slots"></span></div>
+<div id="zoom">
+  <button id="zin" aria-label="Aproximar">+</button>
+  <button id="zout" aria-label="Afastar">−</button>
+</div>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
