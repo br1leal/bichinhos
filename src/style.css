@@ -5,13 +5,9 @@
   padding-top:env(safe-area-inset-top,0px);
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]){
-    --sky-top:#1b2552; --sky-bottom:#51609e; --ink:#f4f1ff; --chip:rgba(22,30,66,.75);
-    --chip-on:#f0b400; --bubble:#fff8e0; --bubble-ink:#c86a00;
-  }
-}
-:root[data-theme="dark"]{
+/* O céu segue a rotina do app (dia/noite da história), não o tema do sistema.
+   .night é ligado pelo botão 🌙, não pelo modo escuro do celular/computador. */
+body.night{
   --sky-top:#1b2552; --sky-bottom:#51609e; --ink:#f4f1ff; --chip:rgba(22,30,66,.75);
   --chip-on:#f0b400; --bubble:#fff8e0; --bubble-ink:#c86a00;
 }
@@ -104,12 +100,7 @@ canvas{z-index:1}
 .skyw.on{opacity:1}
 #skySav{background:linear-gradient(#7cc2f2,#ffdba3)}
 #skyForest{background:linear-gradient(#8db4f2,#dccbff)}
-@media (prefers-color-scheme: dark){
-  :root:not([data-theme="light"]) #skySav{background:linear-gradient(#1b2552,#86667a)}
-  :root:not([data-theme="light"]) #skyForest{background:linear-gradient(#1b2552,#5e5392)}
-}
-:root[data-theme="dark"] #skySav{background:linear-gradient(#1b2552,#86667a)}
-:root[data-theme="dark"] #skyForest{background:linear-gradient(#1b2552,#5e5392)}
+
 .moon{
   pointer-events:none;
   width:clamp(56px,9vw,96px);aspect-ratio:1;border-radius:50%;

@@ -35,21 +35,10 @@ Object.assign(sun.shadow.camera, { left:-9, right:9, top:9, bottom:-9, near:1, f
 scene.add(sun);
 const buddyLight = new THREE.PointLight(0xfff0d8, 0, 9, 1.6); buddyLight.position.set(0, 3.2, 2.6); scene.add(buddyLight);
 
-function isDark(){
-  const t = document.documentElement.dataset.theme;
-  if (t === 'dark') return true;
-  if (t === 'light') return false;
-  return window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
-}
-function applyTheme(){
-  const d = isDark();
-  hemi.intensity = d ? 0.6 : 0.85;
-  hemi.color.set(d ? 0xbfc8ff : 0xffffff);
-  sun.intensity = d ? 0.65 : 0.95;
-  sun.color.set(d ? 0xdfe3ff : 0xffffff);
-}
-applyTheme();
-try { matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme); } catch(e){}
+// A luz da cena segue só a rotina dia/noite do app (função lights(), mais abaixo),
+// nunca o tema claro/escuro do sistema operacional.
+hemi.intensity = 0.85; hemi.color.set(0xffffff);
+sun.intensity = 0.95; sun.color.set(0xffffff);
 
 let planet = null;
 // MVP: todos os bichinhos no mesmo cenário (a fazenda). savanna e forest continuam em world.js para depois.
@@ -140,6 +129,13 @@ function pick(name){
 let arriveTimer = 0, worldT = 99;
 const DROP = 15;
 const easeIn = x => x*x*x, easeOut = x => 1 - Math.pow(1 - x, 3), clamp01 = x => Math.min(1, Math.max(0, x));
+// pulinho sutil de chegada: sobe rápido, passa um pouco do tamanho final (10%) e assenta.
+const POP_OVERSHOOT = 0.1;
+const easePop = x => {
+  if (x >= 1) return 1;
+  const c = 1 + POP_OVERSHOOT;
+  return 1 - Math.pow(1 - x, 2) * (1 - c * x);
+};
 function setWorld(kind){
   const w = worlds[kind];
   if (w === world) return false;
@@ -253,11 +249,12 @@ nightBtn.addEventListener('click', () => { audio.start(); setNight(!nightOn); })
 const dayHemi = new THREE.Color(), nightHemi = new THREE.Color(0x6a78ff);
 const daySun = new THREE.Color(), nightSun = new THREE.Color(0xa9bcff);
 function lights(n){
-  const d = isDark();
+  // Sempre parte do dia "claro" (sem considerar tema escuro do sistema);
+  // a rotina do app (n = quanto a noite já chegou) é quem escurece a cena.
   const sav = world.kind === 'savanna';
-  dayHemi.set(d ? 0xbfc8ff : 0xffffff); daySun.set(d ? 0xdfe3ff : (sav ? 0xfff0cc : 0xffffff));
-  hemi.intensity = (d ? 0.6 : 0.85) * (1 - n) + 0.28 * n;
-  sun.intensity = (d ? 0.65 : 0.95) * (1 - n) + 0.3 * n;
+  dayHemi.set(0xffffff); daySun.set(sav ? 0xfff0cc : 0xffffff);
+  hemi.intensity = 0.85 * (1 - n) + 0.28 * n;
+  sun.intensity = 0.95 * (1 - n) + 0.3 * n;
   hemi.color.copy(dayHemi).lerp(nightHemi, n);
   sun.color.copy(daySun).lerp(nightSun, n);
 }
@@ -358,11 +355,11 @@ function frame(){
     world.group.position.y = -PR - DROP * (1 - easeOut(clamp01((worldT - 0.5) / 1.1)));
   }
   if (cur.delay > 0) cur.delay -= dt;
-  else if (cur.pop < 1){ cur.pop = Math.min(1, cur.pop + dt / 0.6); if (cur.pop >= 1 && cur.arrive){ cur.arrive = false; if (!asleep()) speak(true); } }
-  cur.root.scale.setScalar(CS * Math.max(0.001, easeOut(cur.pop)));
+  else if (cur.pop < 1){ cur.pop = Math.min(1, cur.pop + dt / 0.45); if (cur.pop >= 1 && cur.arrive){ cur.arrive = false; if (!asleep()) speak(true); } }
+  cur.root.scale.setScalar(CS * Math.max(0.001, easePop(cur.pop)));
   if (prev){
     prev.pop -= dt / 0.4;
-    prev.root.scale.setScalar(CS * Math.max(0.001, easeOut(Math.max(0, prev.pop))));
+    prev.root.scale.setScalar(CS * Math.max(0.001, easeIn(Math.max(0, prev.pop))));
     if (prev.pop <= 0){ prev.root.visible = false; prev = null; }
   }
 
